@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+{% block title %}My Dashboard — Dishi Poa{% endblock %}
+{% block extra_head %}
+<style>
+.dash-nav{background:#fff;border-bottom:1px solid #E7E5E4;padding:0 5%;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.dash-body{max-width:900px;margin:0 auto;padding:24px 5%}
+.combo-card{border:2px solid #E7E5E4;border-radius:14px;padding:18px;cursor:pointer;transition:all .2s;background:#fff}
+.combo-card.selected{border-color:var(--orange);background:#FFF7ED}
+.combo-card.sold-out{opacity:.5;pointer-events:none}
+.qty-input{width:60px;text-align:center;border:1.5px solid #E7E5E4;border-radius:8px;padding:7px;font-size:15px;font-weight:700;outline:none}
+.qty-input:focus{border-color:var(--orange)}
+.slot-btn{padding:10px 16px;border:2px solid #E7E5E4;border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.slot-btn.selected{border-color:var(--orange);background:#FFF7ED;color:var(--orange)}
+.slot-btn:disabled{opacity:.5;cursor:not-allowed}
+</style>
+{% endblock %}
+{% block content %}
+<nav class="dash-nav">
+  <div style="font-size:18px;font-weight:900;color:var(--orange)">🍽 Dishi Poa</div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:13px;color:var(--gray)">{{ request.user.name|default:request.user.phone_number }}</span>
+    <a href="/logout/" style="font-size:13px;color:var(--danger);font-weight:600">Logout</a>
+  </div>
+</nav>
+
+<div class="dash-body">
+  {% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }}">{{ msg }}</div>{% endfor %}{% endif %}
+
+  <!-- Today's order status -->
+  {% if today_order %}
+  <div class="card" style="margin-bottom:20px;border-left:4px solid {{ today_order.status_color }}">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:11px;color:var(--gray);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Today's Order</div>
+        <div style="font-size:20px;font-weight:900;color:var(--dark)">{{ today_order.order_code }}</div>
+        <div style="font-size:13px;color:var(--gray);margin-top:3px">
+          {% if today_order.delivery_time_slot %}Delivery: {{ today_order.delivery_time_slot.label }}{% endif %}
+        </div>
+      </div>
+      <div style="text-align:right">
+        <span class="badge badge-{{ today_order.status }}">{{ today_order.get_status_display }}</span>
+        <div style="font-size:18px;font-weight:900;color:var(--orange);margin-top:6px">KES {{ today_order.total_amount }}</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <a href="/order/{{ today_order.order_code }}/" class="btn btn-outline btn-sm">View Details</a>
+      {% if today_order.status == 'PENDING' %}
+      <a href="/order/{{ today_order.order_code }}/pay/" class="btn btn-primary btn-sm">Pay Now</a>
+      {% endif %}
+      {% if today_order.can_edit %}
+      <a href="/order/{{ today_order.order_code }}/edit/" class="btn btn-sm" style="background:#FEF3C7;color:#D97706;border:1px solid #FDE68A">Edit ({{ today_order.minutes_left_to_edit }}min left)</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ORDER FORM -->
+  {% if menu and menu.is_ordering_open and not today_order %}
+  <div class="card" style="margin-bottom:20px">
+    <h2 style="font-size:20px;font-weight:900;margin-bottom:4px">Today's Menu</h2>
+    <p style="color:var(--gray);font-size:13px;margin-bottom:20px">Order closes at <strong>{{ menu.cutoff_time|time:"H:i" }}</strong></p>
+
+    <form method="post" action="/order/place/" id="order-form">
+      {% csrf_token %}
+
+      <!-- Combinations -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:24px">
+        {% for combo in menu.combinations.all %}
+        <div class="combo-card {% if combo.is_sold_out %}sold-out{% endif %}" onclick="toggleCombo({{ combo.id }}, this)">
+          <div style="font-weight:800;font-size:14px;margin-bottom:4px">{{ combo.name }}</div>
+          {% if combo.description %}<div style="font-size:12px;color:var(--gray);margin-bottom:6px">{{ combo.description }}</div>{% endif %}
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:18px;font-weight:900;color:var(--orange)">KES {{ combo.price }}</span>
+            <div style="text-align:right">
+              {% if combo.is_sold_out %}
+              <span style="font-size:11px;color:var(--danger);font-weight:700">Sold Out</span>
+              {% else %}
+              <span style="font-size:11px;color:var(--gray)">{{ combo.remaining }} left</span>
+              <div style="margin-top:6px;display:none" id="qty-wrap-{{ combo.id }}">
+                <input type="number" name="qty_{{ combo.id }}" id="qty_{{ combo.id }}" class="qty-input"
+                  min="1" max="{{ combo.remaining }}" value="1"
+                  onclick="event.stopPropagation()"/>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Delivery time slot -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:13px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Delivery Time</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          {% for slot in slots %}
+          <button type="button" class="slot-btn {% if slot.is_full %}disabled{% endif %}"
+            onclick="selectSlot({{ slot.id }}, this)"
+            {% if slot.is_full %}disabled{% endif %}>
+            {{ slot.label }}
+            {% if slot.is_full %}(Full){% else %}<span style="font-size:10px;color:var(--gray)"> · {{ slot.slots_left }} spots</span>{% endif %}
+          </button>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="slot_id" id="slot-input"/>
+      </div>
+
+      <!-- Delivery location -->
+      <div style="margin-bottom:20px">
+        <div style="font-size:13px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Delivery Location</div>
+        {% if locations %}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          {% for loc in locations %}
+          <button type="button" class="slot-btn" onclick="selectLocation('{{ loc.id }}','{{ loc.address_text|escapejs }}','{{ loc.latitude|default:'' }}','{{ loc.longitude|default:'' }}', this)">
+            📍 {{ loc.name }}
+          </button>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <input type="hidden" name="location_id" id="location-id"/>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Or type delivery address</label>
+          <input type="text" name="address_text" id="address-text" placeholder="e.g. Kilimani, Ngong Road, Gate 5"/>
+        </div>
+        <input type="hidden" name="latitude" id="lat-input"/>
+        <input type="hidden" name="longitude" id="lng-input"/>
+        <button type="button" onclick="getLocation()" class="btn btn-outline btn-sm">📍 Use My GPS Location</button>
+      </div>
+
+      <!-- Instructions -->
+      <div class="form-group" style="margin-bottom:20px">
+        <label>Special Instructions (optional)</label>
+        <textarea name="instructions" rows="2" placeholder="e.g. Extra greens, no onions..."></textarea>
+      </div>
+
+      <!-- Order summary -->
+      <div id="order-summary" style="display:none;background:#FFF7ED;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #FED7AA">
+        <div style="font-weight:700;margin-bottom:8px">Order Summary</div>
+        <div id="summary-items"></div>
+        <div style="border-top:1px solid #FED7AA;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between">
+          <strong>Total</strong>
+          <strong id="summary-total" style="color:var(--orange)">KES 0</strong>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%;padding:14px;font-size:15px" id="submit-btn" disabled>
+        Place Order
+      </button>
+    </form>
+  </div>
+  {% elif menu and not menu.is_ordering_open %}
+  <div class="card" style="text-align:center;padding:40px">
+    <div style="font-size:44px;margin-bottom:12px">⏰</div>
+    <h3 style="font-family:inherit;font-size:18px;font-weight:800;margin-bottom:8px">Ordering Closed</h3>
+    <p style="color:var(--gray)">{{ site.ordering_closed_message }}</p>
+  </div>
+  {% elif not today_order %}
+  <div class="card" style="text-align:center;padding:40px">
+    <div style="font-size:44px;margin-bottom:12px">🍽</div>
+    <p style="color:var(--gray)">No menu available today. Check back soon!</p>
+  </div>
+  {% endif %}
+
+  <!-- ORDER HISTORY -->
+  {% if orders %}
+  <div class="card">
+    <h3 style="font-size:16px;font-weight:800;margin-bottom:14px">Order History</h3>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#FFF7ED">
+          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--gray)">Order</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--gray)">Amount</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--gray)">Status</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:var(--gray)">Date</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          {% for o in orders %}
+          <tr style="border-bottom:1px solid #F3F4F6">
+            <td style="padding:10px 12px;font-weight:700;font-family:monospace;color:var(--orange)">{{ o.order_code }}</td>
+            <td style="padding:10px 12px;font-weight:600">KES {{ o.total_amount }}</td>
+            <td style="padding:10px 12px"><span class="badge badge-{{ o.status }}">{{ o.get_status_display }}</span></td>
+            <td style="padding:10px 12px;font-size:12px;color:var(--gray)">{{ o.created_at|date:"d M, H:i" }}</td>
+            <td style="padding:10px 12px"><a href="/order/{{ o.order_code }}/" style="color:var(--orange);font-size:12px;font-weight:600">View →</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+const PRICES = {
+  {% for combo in menu.combinations.all %}
+  '{{ combo.id }}': {{ combo.price }},
+  {% endfor %}
+};
+const NAMES = {
+  {% for combo in menu.combinations.all %}
+  '{{ combo.id }}': '{{ combo.name|escapejs }}',
+  {% endfor %}
+};
+
+let selected = {};
+
+function toggleCombo(id, card){
+  const wrap = document.getElementById('qty-wrap-'+id);
+  if(selected[id]){
+    delete selected[id];
+    card.classList.remove('selected');
+    wrap.style.display = 'none';
+  } else {
+    selected[id] = 1;
+    card.classList.add('selected');
+    wrap.style.display = 'block';
+  }
+  updateSummary();
+}
+
+function updateSummary(){
+  let total = 0;
+  let html = '';
+  for(const id in selected){
+    const qty = parseInt(document.getElementById('qty_'+id)?.value || 1);
+    selected[id] = qty;
+    const sub = PRICES[id] * qty;
+    total += sub;
+    html += `<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>${NAMES[id]} x${qty}</span><span>KES ${sub}</span></div>`;
+  }
+  const summary = document.getElementById('order-summary');
+  const btn = document.getElementById('submit-btn');
+  if(Object.keys(selected).length > 0){
+    summary.style.display = 'block';
+    document.getElementById('summary-items').innerHTML = html;
+    document.getElementById('summary-total').textContent = 'KES ' + total;
+    btn.disabled = false;
+  } else {
+    summary.style.display = 'none';
+    btn.disabled = true;
+  }
+}
+
+// Listen on qty inputs
+document.querySelectorAll('.qty-input').forEach(inp=>{
+  inp.addEventListener('input', updateSummary);
+});
+
+function selectSlot(id, btn){
+  document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('slot-input').value = id;
+}
+
+function selectLocation(id, addr, lat, lng, btn){
+  document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('location-id').value = id;
+  document.getElementById('address-text').value = addr;
+  if(lat) document.getElementById('lat-input').value = lat;
+  if(lng) document.getElementById('lng-input').value = lng;
+}
+
+function getLocation(){
+  if(!navigator.geolocation){ alert('GPS not supported'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById('lat-input').value = pos.coords.latitude;
+    document.getElementById('lng-input').value = pos.coords.longitude;
+    document.getElementById('address-text').value = `GPS: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+  }, ()=>alert('Could not get location.'));
+}
+</script>
+{% endblock %}

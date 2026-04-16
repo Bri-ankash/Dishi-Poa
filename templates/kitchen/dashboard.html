@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}Kitchen — Dishi Poa{% endblock %}
+{% block extra_head %}
+<style>
+body{background:#111}
+.k-nav{background:#000;padding:0 4%;height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #222;position:sticky;top:0;z-index:50}
+.k-body{max-width:1100px;margin:0 auto;padding:20px 4%}
+.k-card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:18px;margin-bottom:12px}
+.k-stat{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:18px;text-align:center}
+.k-order{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:14px;margin-bottom:8px}
+.k-order:hover{border-color:#E85D04}
+select.k-select{background:#222;border:1px solid #333;color:#fff;padding:7px 12px;border-radius:7px;font-size:13px;font-family:inherit;outline:none}
+.k-btn{display:inline-flex;align-items:center;justify-content:center;padding:7px 16px;border-radius:8px;font-weight:700;font-size:12px;border:none;cursor:pointer;font-family:inherit}
+</style>
+{% endblock %}
+{% block content %}
+<nav class="k-nav">
+  <div style="font-size:17px;font-weight:900;color:#E85D04">🍳 Kitchen</div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span style="color:#888;font-size:12px">{{ today }}</span>
+    <a href="/logout/" style="color:#EF4444;font-size:12px;font-weight:600">Logout</a>
+  </div>
+</nav>
+
+<div class="k-body">
+  {% if messages %}{% for m in messages %}<div class="alert alert-{{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+
+  <!-- Stats -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-bottom:20px">
+    {% for label, val, color in order_stats|default:"" %}
+    <div class="k-stat"><div style="font-size:26px;font-weight:900;color:{{ color }}">{{ val }}</div><div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:3px">{{ label }}</div></div>
+    {% endfor %}
+    <div class="k-stat"><div style="font-size:26px;font-weight:900;color:#F59E0B">{{ total }}</div><div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:3px">Total</div></div>
+    <div class="k-stat"><div style="font-size:26px;font-weight:900;color:#10B981">{{ paid }}</div><div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:3px">Paid</div></div>
+    <div class="k-stat"><div style="font-size:26px;font-weight:900;color:#3B82F6">{{ preparing }}</div><div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:3px">Preparing</div></div>
+    <div class="k-stat"><div style="font-size:26px;font-weight:900;color:#8B5CF6">{{ dispatched }}</div><div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:3px">Dispatched</div></div>
+    <div class="k-stat"><div style="font-size:26px;font-weight:900;color:#059669">{{ delivered }}</div><div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:3px">Delivered</div></div>
+    <div class="k-stat"><div style="font-size:26px;font-weight:900;color:#EF4444">{{ pending_payment }}</div><div style="font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-top:3px">Pending Pay</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+    <!-- Pending Payments -->
+    <div class="k-card">
+      <h3 style="color:#fff;font-size:14px;font-weight:800;margin-bottom:12px">⚡ Confirm Payments</h3>
+      {% for payment in pending_payments %}
+      <div style="background:#222;border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="color:#E85D04;font-weight:700;font-size:13px;font-family:monospace">{{ payment.order.order_code }}</div>
+            <div style="color:#10B981;font-size:13px;font-family:monospace;font-weight:700">{{ payment.mpesa_code }}</div>
+            <div style="color:#888;font-size:11px">KES {{ payment.amount }} · {{ payment.order.user.name|default:payment.order.user.phone_number }}</div>
+          </div>
+          <a href="/kitchen/payment/{{ payment.id }}/confirm/" class="k-btn" style="background:#10B981;color:#fff">✓ Confirm</a>
+        </div>
+      </div>
+      {% empty %}
+      <p style="color:#555;font-size:13px">No pending payments.</p>
+      {% endfor %}
+    </div>
+
+    <!-- Meal Summary -->
+    <div class="k-card">
+      <h3 style="color:#fff;font-size:14px;font-weight:800;margin-bottom:12px">🍽 Meal Totals</h3>
+      {% for meal, data in meal_groups.items %}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #222">
+        <span style="color:#ccc;font-size:13px">{{ meal }}</span>
+        <span style="color:#E85D04;font-weight:900;font-size:16px">{{ data.count }}</span>
+      </div>
+      {% empty %}
+      <p style="color:#555;font-size:13px">No orders yet.</p>
+      {% endfor %}
+    </div>
+
+    <!-- Orders by Location -->
+    <div class="k-card">
+      <h3 style="color:#fff;font-size:14px;font-weight:800;margin-bottom:12px">📍 By Location</h3>
+      {% for area, area_orders in location_groups.items %}
+      <div style="margin-bottom:12px">
+        <div style="color:#F59E0B;font-size:12px;font-weight:700;margin-bottom:5px">{{ area }}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          {% for o in area_orders %}
+          <span style="background:#1a2a1a;color:#10B981;padding:3px 8px;border-radius:6px;font-size:11px;font-family:monospace">{{ o.order_code }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% empty %}
+      <p style="color:#555;font-size:13px">No location data.</p>
+      {% endfor %}
+    </div>
+
+    <!-- Order Management -->
+    <div class="k-card">
+      <h3 style="color:#fff;font-size:14px;font-weight:800;margin-bottom:12px">⚙ Update Orders</h3>
+      {% for order in orders|slice:":15" %}
+      <div class="k-order">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="color:#E85D04;font-family:monospace;font-weight:700;font-size:13px">#{{ order.daily_order_number|stringformat:"03d" }} {{ order.order_code }}</div>
+            <div style="color:#888;font-size:11px;margin-top:2px">{{ order.user.name|default:order.user.phone_number }} · {% if order.delivery_time_slot %}{{ order.delivery_time_slot.label }}{% endif %}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+              {% for item in order.items.all %}
+              <span style="background:#222;color:#ccc;padding:2px 7px;border-radius:5px;font-size:11px">{{ item.menu_combination.name|truncatechars:20 }} ×{{ item.quantity }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          <form method="post" action="/kitchen/order/{{ order.id }}/status/" style="display:flex;gap:6px;align-items:center">
+            {% csrf_token %}
+            <select name="status" class="k-select">
+              {% for val, label in order.get_status_choices %}
+              <option value="{{ val }}" {% if val == order.status %}selected{% endif %}>{{ label }}</option>
+              {% empty %}
+              <option value="PAID" {% if order.status == 'PAID' %}selected{% endif %}>Paid</option>
+              <option value="PREPARING" {% if order.status == 'PREPARING' %}selected{% endif %}>Preparing</option>
+              <option value="DISPATCHED" {% if order.status == 'DISPATCHED' %}selected{% endif %}>Dispatched</option>
+              <option value="DELIVERED" {% if order.status == 'DELIVERED' %}selected{% endif %}>Delivered</option>
+              <option value="CANCELLED" {% if order.status == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+              {% endfor %}
+            </select>
+            {% if riders %}
+            <select name="rider_id" class="k-select">
+              <option value="">Rider</option>
+              {% for r in riders %}<option value="{{ r.id }}">{{ r.name|default:r.phone_number }}</option>{% endfor %}
+            </select>
+            {% endif %}
+            <button type="submit" class="k-btn" style="background:#E85D04;color:#fff">Update</button>
+          </form>
+        </div>
+      </div>
+      {% empty %}
+      <p style="color:#555;font-size:13px">No orders today.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

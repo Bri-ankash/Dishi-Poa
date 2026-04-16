@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Login — Dishi Poa{% endblock %}
+{% block content %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#FFF7ED,#FFFBF7);padding:20px">
+  <div style="width:100%;max-width:380px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:44px;margin-bottom:8px">🍽</div>
+      <h1 style="font-size:26px;font-weight:900;color:#E85D04">Dishi Poa</h1>
+      <p style="color:#78716C;font-size:13px">Login to order your lunch</p>
+    </div>
+    <div class="card">
+      {% if messages %}{% for m in messages %}<div class="alert alert-{{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-group"><label>Phone Number</label><input type="tel" name="phone" required placeholder="0712345678" autofocus/></div>
+        <div class="form-group"><label>Password</label><input type="password" name="password" required placeholder="Your password"/></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:13px;font-size:15px">Login</button>
+      </form>
+      <p style="text-align:center;margin-top:14px;font-size:13px;color:#78716C">New here? <a href="/register/" style="color:#E85D04;font-weight:700">Register</a></p>
+    </div>
+    <p style="text-align:center;margin-top:14px"><a href="/" style="color:#78716C;font-size:13px">← Back to menu</a></p>
+  </div>
+</div>
+{% endblock %}

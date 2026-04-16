@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Register — Dishi Poa{% endblock %}
+{% block content %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#FFF7ED,#FFFBF7);padding:20px">
+  <div style="width:100%;max-width:380px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:44px;margin-bottom:8px">🍽</div>
+      <h1 style="font-size:26px;font-weight:900;color:#E85D04">Create Account</h1>
+      <p style="color:#78716C;font-size:13px">Start ordering fresh daily meals</p>
+    </div>
+    <div class="card">
+      {% if messages %}{% for m in messages %}<div class="alert alert-{{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-group"><label>Name (optional)</label><input type="text" name="name" placeholder="Your name"/></div>
+        <div class="form-group"><label>Phone Number *</label><input type="tel" name="phone" required placeholder="0712345678"/></div>
+        <div class="form-group"><label>Password *</label><input type="password" name="password" required placeholder="At least 6 characters"/></div>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:13px;font-size:15px">Create Account & Order</button>
+      </form>
+      <p style="text-align:center;margin-top:14px;font-size:13px;color:#78716C">Have an account? <a href="/login/" style="color:#E85D04;font-weight:700">Login</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

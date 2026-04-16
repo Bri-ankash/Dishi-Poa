@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block title %}Owner — Dishi Poa{% endblock %}
+{% block extra_head %}
+<style>
+.o-nav{background:#fff;border-bottom:1px solid #E7E5E4;padding:0 5%;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.o-body{max-width:1100px;margin:0 auto;padding:24px 5%}
+.tab-btn{padding:9px 18px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:#78716C;transition:all .2s;font-family:inherit}
+.tab-btn.active{background:#E85D04;color:#fff}
+.tab-panel{display:none}.tab-panel.active{display:block}
+</style>
+{% endblock %}
+{% block content %}
+<nav class="o-nav">
+  <div style="font-size:18px;font-weight:900;color:#E85D04">🍽 Owner Panel</div>
+  <div style="display:flex;gap:8px">
+    <a href="/kitchen/" class="btn btn-outline btn-sm">Kitchen View</a>
+    <a href="/logout/" style="font-size:13px;color:#DC2626;font-weight:600;align-self:center">Logout</a>
+  </div>
+</nav>
+
+<div class="o-body">
+  {% if messages %}{% for m in messages %}<div class="alert alert-{{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+
+  <!-- Tab buttons -->
+  <div style="display:flex;gap:6px;margin-bottom:20px;background:#F3F4F6;padding:4px;border-radius:10px;width:fit-content">
+    <button class="tab-btn active" onclick="showTab('analytics')">Analytics</button>
+    <button class="tab-btn" onclick="showTab('menu')">Menu</button>
+    <button class="tab-btn" onclick="showTab('settings')">Settings</button>
+  </div>
+
+  <!-- ANALYTICS -->
+  <div class="tab-panel active" id="tab-analytics">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:20px">
+      <div class="card">
+        <div style="font-size:11px;color:#78716C;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Orders Today</div>
+        <div style="font-size:36px;font-weight:900;color:#E85D04">{{ orders_today }}</div>
+      </div>
+      <div class="card">
+        <div style="font-size:11px;color:#78716C;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Revenue Today</div>
+        <div style="font-size:28px;font-weight:900;color:#16A34A">KES {{ revenue_today|floatformat:0 }}</div>
+      </div>
+      <div class="card">
+        <div style="font-size:11px;color:#78716C;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Completion Rate</div>
+        <div style="font-size:36px;font-weight:900;color:#3B82F6">{{ completion_rate }}%</div>
+      </div>
+      <div class="card">
+        <div style="font-size:11px;color:#78716C;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">All-Time Revenue</div>
+        <div style="font-size:24px;font-weight:900;color:#16A34A">KES {{ revenue_total|floatformat:0 }}</div>
+      </div>
+      {% if top_meal %}
+      <div class="card">
+        <div style="font-size:11px;color:#78716C;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Top Meal Today</div>
+        <div style="font-size:14px;font-weight:800;color:#E85D04">{{ top_meal.menu_combination__name }}</div>
+        <div style="font-size:13px;color:#78716C">{{ top_meal.total }} orders</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- MENU MANAGEMENT -->
+  <div class="tab-panel" id="tab-menu">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card">
+        <h3 style="font-size:16px;font-weight:800;margin-bottom:16px">Create / Update Menu</h3>
+        <form method="post" action="/owner/menu/create/">
+          {% csrf_token %}
+          <div class="form-group"><label>Date</label><input type="date" name="date" value="{{ today }}" required/></div>
+          <div class="form-group"><label>Main Item (e.g. Beef, Fish)</label><input type="text" name="main_item" required placeholder="Beef"/></div>
+          <div class="form-group"><label>Cutoff Time</label><input type="time" name="cutoff_time" value="11:00" required/></div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Save Menu</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3 style="font-size:16px;font-weight:800;margin-bottom:16px">Add Food Combination</h3>
+        {% if today_menu %}
+        <p style="color:#78716C;font-size:13px;margin-bottom:14px">Adding to: <strong>{{ today_menu.date }}</strong></p>
+        <form method="post" action="/owner/menu/{{ today_menu.id }}/combo/">
+          {% csrf_token %}
+          <div class="form-group"><label>Name</label><input type="text" name="name" required placeholder="Ugali + Beef + Greens"/></div>
+          <div class="form-group"><label>Description</label><input type="text" name="description" placeholder="Optional description"/></div>
+          <div class="form-group"><label>Price (KES)</label><input type="number" name="price" required min="1"/></div>
+          <div class="form-group"><label>Max Quantity</label><input type="number" name="max_quantity" value="50" required min="1"/></div>
+          <button type="submit" class="btn btn-primary" style="width:100%">Add Combination</button>
+        </form>
+        {% else %}
+        <p style="color:#78716C;font-size:14px">Create today's menu first.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if today_menu %}
+    <div class="card" style="margin-top:14px">
+      <h3 style="font-size:15px;font-weight:800;margin-bottom:14px">Today's Combinations</h3>
+      {% for combo in today_menu.combinations.all %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F3F4F6">
+        <div>
+          <div style="font-weight:700;font-size:14px">{{ combo.name }}</div>
+          <div style="font-size:12px;color:#78716C">KES {{ combo.price }} · {{ combo.remaining }}/{{ combo.max_quantity }} remaining</div>
+        </div>
+        <span class="badge {% if combo.is_sold_out %}badge-CANCELLED{% else %}badge-PAID{% endif %}">
+          {% if combo.is_sold_out %}Sold Out{% else %}Available{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="tab-panel" id="tab-settings">
+    <div class="card">
+      <h3 style="font-size:16px;font-weight:800;margin-bottom:16px">Business Settings</h3>
+      <form method="post" action="/owner/settings/" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="form-group"><label>Business Name</label><input type="text" name="business_name" value="{{ site.business_name }}"/></div>
+          <div class="form-group"><label>Tagline</label><input type="text" name="tagline" value="{{ site.tagline }}"/></div>
+          <div class="form-group"><label>Phone</label><input type="text" name="phone" value="{{ site.phone }}"/></div>
+          <div class="form-group"><label>WhatsApp</label><input type="text" name="whatsapp_number" value="{{ site.whatsapp_number }}"/></div>
+          <div class="form-group"><label>M-Pesa Till Number</label><input type="text" name="mpesa_till" value="{{ site.mpesa_till }}"/></div>
+          <div class="form-group"><label>M-Pesa Paybill (optional)</label><input type="text" name="mpesa_paybill" value="{{ site.mpesa_paybill }}"/></div>
+          <div class="form-group"><label>Ordering Open Message</label><input type="text" name="ordering_open_message" value="{{ site.ordering_open_message }}"/></div>
+          <div class="form-group"><label>Ordering Closed Message</label><input type="text" name="ordering_closed_message" value="{{ site.ordering_closed_message }}"/></div>
+        </div>
+        <div class="form-group"><label>About / Description</label><textarea name="about_text" rows="3">{{ site.about_text }}</textarea></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div class="form-group"><label>Logo</label><input type="file" name="logo" accept="image/*"/>{% if site.logo %}<img src="{{ site.logo.url }}" style="height:40px;margin-top:6px;border-radius:6px"/>{% endif %}</div>
+          <div class="form-group"><label>Hero Image</label><input type="file" name="hero_image" accept="image/*"/></div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="padding:12px 32px;font-size:15px">Save Settings</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function showTab(name){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'))
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'))
+  document.getElementById('tab-'+name).classList.add('active')
+  event.target.classList.add('active')
+}
+</script>
+{% endblock %}

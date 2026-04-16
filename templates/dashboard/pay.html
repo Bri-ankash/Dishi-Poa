@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Pay — {{ order.order_code }}{% endblock %}
+{% block content %}
+<div style="max-width:480px;margin:40px auto;padding:0 20px">
+  <div style="text-align:center;margin-bottom:24px">
+    <div style="font-size:44px;margin-bottom:8px">📱</div>
+    <h1 style="font-size:22px;font-weight:900">Pay via M-Pesa</h1>
+    <p style="color:#78716C;font-size:14px;margin-top:4px">Order {{ order.order_code }}</p>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;border-left:4px solid #E85D04">
+    <div style="text-align:center">
+      <div style="font-size:13px;color:#78716C;margin-bottom:6px">Amount to Pay</div>
+      <div style="font-size:40px;font-weight:900;color:#E85D04">KES {{ order.total_amount }}</div>
+    </div>
+    <div style="margin-top:20px;background:#FFF7ED;border-radius:10px;padding:16px">
+      <p style="font-size:14px;line-height:2.2;color:#1A0A00">
+        <strong>Step 1:</strong> Open M-Pesa<br/>
+        <strong>Step 2:</strong> Lipa na M-Pesa → Buy Goods (Till)<br/>
+        <strong>Till Number:</strong> <span style="color:#E85D04;font-size:22px;font-weight:900;font-family:monospace">{{ site.mpesa_till|default:"(Set in owner dashboard)" }}</span><br/>
+        <strong>Amount:</strong> <span style="color:#16A34A;font-weight:700">KES {{ order.total_amount }}</span><br/>
+        <strong>Step 3:</strong> Note the M-Pesa code from SMS<br/>
+        <strong>Step 4:</strong> Enter it below
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="font-size:16px;font-weight:800;margin-bottom:16px">Enter M-Pesa Confirmation Code</h3>
+    <form method="post" action="/order/{{ order.order_code }}/pay/submit/">
+      {% csrf_token %}
+      <div class="form-group">
+        <label>M-Pesa Code (e.g. QKJH12345)</label>
+        <input type="text" name="mpesa_code" required placeholder="Enter M-Pesa code" style="font-size:18px;font-family:monospace;text-transform:uppercase;letter-spacing:2px"/>
+      </div>
+      <div class="form-group">
+        <label>M-Pesa Phone (optional)</label>
+        <input type="tel" name="mpesa_phone" placeholder="0712345678"/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;padding:14px;font-size:15px">Confirm Payment</button>
+    </form>
+  </div>
+
+  <div style="text-align:center;margin-top:16px">
+    <a href="/order/{{ order.order_code }}/" style="color:#78716C;font-size:13px">← Back to Order</a>
+  </div>
+</div>
+{% endblock %}
