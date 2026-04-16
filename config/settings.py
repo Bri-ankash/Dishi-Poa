@@ -13,7 +13,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'users', 'menu', 'orders', 'payments', 'delivery', 'core',
+    'users', 'menu', 'orders', 'payments', 'delivery', 'core', 'landing',
 ]
 
 MIDDLEWARE = [
@@ -59,8 +59,8 @@ LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 
 # M-Pesa
-MPESA_TILL = os.environ.get('MPESA_TILL', '')
-MPESA_PAYBILL = os.environ.get('MPESA_PAYBILL', '')
+MPESA_TILL = os.environ.get('MPESA_TILL', '5359428')
+MPESA_PAYBILL = os.environ.get('MPESA_PAYBILL', '5359428')
 MPESA_CONSUMER_KEY = os.environ.get('MPESA_CONSUMER_KEY', '')
 MPESA_CONSUMER_SECRET = os.environ.get('MPESA_CONSUMER_SECRET', '')
 MPESA_PASSKEY = os.environ.get('MPESA_PASSKEY', '')

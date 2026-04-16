@@ -119,52 +119,72 @@ def update_order_status(request, order_id):
                 )
     return redirect('/kitchen/')
 
+
 @owner_required
 def owner_dashboard(request):
     from menu.models import DailyMenu, MenuCombination
     from core.models import SiteSettings
-    today = timezone.localdate()
+    from payments.models import Payment
+    from orders.models import Order, STATUS_CHOICES
+    from delivery.models import DeliverySlot, Delivery
+    from users.models import DishiUser
+    from landing.models import GalleryItem
+    today = timezone.now().localdate() if hasattr(timezone.now(), 'localdate') else timezone.localdate()
+    from django.db.models import Sum
 
-    # Analytics
-    orders_today = Order.objects.filter(created_at__date=today).exclude(status='CANCELLED')
-    revenue_today = orders_today.filter(status__in=['PAID','PREPARING','DISPATCHED','DELIVERED']).aggregate(r=Sum('total_amount'))['r'] or 0
-    orders_total = Order.objects.exclude(status='CANCELLED').count()
-    revenue_total = Order.objects.filter(status__in=['PAID','PREPARING','DISPATCHED','DELIVERED']).aggregate(r=Sum('total_amount'))['r'] or 0
+    orders_today_qs = Order.objects.filter(created_at__date=today).exclude(status='CANCELLED')
+    revenue_today = orders_today_qs.filter(status__in=["PAID","PREPARING","DISPATCHED","DELIVERED"]).aggregate(r=Sum("total_amount"))["r"] or 0
+    orders_total = Order.objects.exclude(status="CANCELLED").count()
+    revenue_total = Order.objects.filter(status__in=["PAID","PREPARING","DISPATCHED","DELIVERED"]).aggregate(r=Sum("total_amount"))["r"] or 0
     completion_rate = 0
-    if orders_today.count() > 0:
-        completed = orders_today.filter(status='DELIVERED').count()
-        completion_rate = round((completed / orders_today.count()) * 100)
-
-    # Top meal
-    top_meal = OrderItem.objects.filter(
-        order__created_at__date=today
-    ).values('menu_combination__name').annotate(
-        total=Sum('quantity')
-    ).order_by('-total').first()
-
-    # Menu management
-    menus = DailyMenu.objects.all()[:7]
+    if orders_today_qs.count() > 0:
+        completed = orders_today_qs.filter(status="DELIVERED").count()
+        completion_rate = round((completed / orders_today_qs.count()) * 100)
+    from django.db.models import Sum as DSum
+    top_meal = None
+    try:
+        from orders.models import OrderItem
+        from django.db.models import Sum as S2
+        top_meal = OrderItem.objects.filter(order__created_at__date=today).values("menu_combination__name").annotate(total=S2("quantity")).order_by("-total").first()
+    except: pass
+    try:
+        from landing.models import GalleryItem as GI
+        gallery_items = GI.objects.all().order_by("-created_at")
+    except:
+        gallery_items = []
+    menus = DailyMenu.objects.all().order_by("-date")[:7]
     try:
         today_menu = DailyMenu.objects.get(date=today)
     except: today_menu = None
-
     site = SiteSettings.get()
-    riders = DishiUser.objects.filter(role='rider')
-
+    riders = DishiUser.objects.filter(role="rider")
+    all_staff = DishiUser.objects.filter(role__in=["kitchen","rider"]).order_by("role","name")
+    pending_payments = Payment.objects.filter(status="PENDING").select_related("order__user").order_by("-created_at")
+    all_payments = Payment.objects.all().select_related("order__user").order_by("-created_at")[:50]
+    all_orders = Order.objects.filter(created_at__date=today).select_related("user","delivery_time_slot").prefetch_related("items__menu_combination").order_by("daily_order_number")
+    delivery_slots = DeliverySlot.objects.all().order_by("order_position")
     ctx = {
-        'orders_today': orders_today.count(),
-        'revenue_today': revenue_today,
-        'orders_total': orders_total,
-        'revenue_total': revenue_total,
-        'completion_rate': completion_rate,
-        'top_meal': top_meal,
-        'menus': menus,
-        'today_menu': today_menu,
-        'site': site,
-        'riders': riders,
-        'today': today,
+        "orders_today": orders_today_qs.count(),
+        "revenue_today": revenue_today,
+        "orders_total": orders_total,
+        "revenue_total": revenue_total,
+        "completion_rate": completion_rate,
+        "top_meal": top_meal,
+        "menus": menus,
+        "today_menu": today_menu,
+        "site": site,
+        "riders": riders,
+        "today": today,
+        "gallery_items": gallery_items,
+        "all_staff": all_staff,
+        "pending_payments": pending_payments,
+        "all_payments": all_payments,
+        "all_orders": all_orders,
+        "delivery_slots": delivery_slots,
+        "statuses": [("PAID","Paid"),("PREPARING","Preparing"),("DISPATCHED","Dispatched"),("DELIVERED","Delivered"),("CANCELLED","Cancelled"),("FAILED","Failed")],
     }
-    return render(request, 'owner/dashboard.html', ctx)
+    return render(request, "owner/dashboard.html", ctx)
+
 
 @owner_required
 def create_menu(request):
@@ -226,4 +246,122 @@ def update_site_settings(request):
         if 'chef_photo' in f: site.chef_photo = f['chef_photo']
         site.save()
         messages.success(request, 'Settings updated!')
+    return redirect('/owner/')
+
+# ─── GALLERY ───
+@owner_required
+def add_gallery_owner(request):
+    from django.contrib import messages
+    if request.method == 'POST' and request.FILES.get('image'):
+        try:
+            from landing.models import GalleryItem
+            GalleryItem.objects.create(
+                title=request.POST.get('title','Photo'),
+                image=request.FILES['image'],
+                category=request.POST.get('category','general'),
+                uploaded_by=request.user,
+            )
+            messages.success(request, 'Photo added to gallery!')
+        except Exception as e:
+            messages.error(request, f'Error: {e}')
+    return redirect('/owner/#tab-site')
+
+@owner_required
+def delete_gallery_owner(request, pk):
+    from django.contrib import messages
+    try:
+        from landing.models import GalleryItem
+        item = GalleryItem.objects.get(pk=pk)
+        item.delete()
+        messages.success(request, 'Photo deleted.')
+    except Exception as e:
+        messages.error(request, f'Error: {e}')
+    return redirect('/owner/')
+
+# ─── SLOT ───
+@owner_required
+def add_slot(request):
+    from django.contrib import messages
+    from delivery.models import DeliverySlot
+    if request.method == 'POST':
+        DeliverySlot.objects.create(
+            label=request.POST.get('label',''),
+            start_time=request.POST.get('start_time','12:00'),
+            end_time=request.POST.get('end_time','12:30'),
+            capacity=int(request.POST.get('capacity',30)),
+        )
+        messages.success(request, 'Slot added!')
+    return redirect('/owner/')
+
+# ─── RIDER ───
+@owner_required
+def add_rider(request):
+    from django.contrib import messages
+    from users.models import DishiUser
+    if request.method == 'POST':
+        phone = request.POST.get('phone','').strip()
+        name = request.POST.get('name','').strip()
+        if not DishiUser.objects.filter(phone_number=phone).exists():
+            DishiUser.objects.create_user(
+                phone_number=phone,
+                password=phone,
+                name=name,
+                role='rider',
+            )
+            messages.success(request, f'Rider {name} added!')
+        else:
+            messages.error(request, 'Phone already registered.')
+    return redirect('/owner/')
+
+# ─── STAFF ───
+@owner_required
+def add_staff(request):
+    from django.contrib import messages
+    from users.models import DishiUser
+    if request.method == 'POST':
+        phone = request.POST.get('phone','').strip()
+        name = request.POST.get('name','').strip()
+        role = request.POST.get('role','kitchen')
+        password = request.POST.get('password','staff123')
+        if not DishiUser.objects.filter(phone_number=phone).exists():
+            DishiUser.objects.create_user(
+                phone_number=phone, password=password,
+                name=name, role=role,
+            )
+            messages.success(request, f'{name} added as {role}!')
+        else:
+            messages.error(request, 'Phone already registered.')
+    return redirect('/owner/')
+
+# ─── COMBO TOGGLE ───
+@owner_required
+def toggle_combo(request, pk):
+    from django.contrib import messages
+    from menu.models import MenuCombination
+    if request.method == 'POST':
+        combo = get_object_or_404(MenuCombination, pk=pk)
+        combo.is_available = not combo.is_available
+        combo.save()
+        messages.success(request, f'{"Available" if combo.is_available else "Hidden"}: {combo.name}')
+    return redirect('/owner/')
+
+@owner_required
+def delete_combo(request, pk):
+    from django.contrib import messages
+    from menu.models import MenuCombination
+    combo = get_object_or_404(MenuCombination, pk=pk)
+    name = combo.name
+    combo.delete()
+    messages.success(request, f'Removed: {name}')
+    return redirect('/owner/')
+
+# ─── REJECT PAYMENT ───
+@owner_required
+def reject_payment(request, pk):
+    from django.contrib import messages
+    from payments.models import Payment
+    payment = get_object_or_404(Payment, pk=pk)
+    payment.status = 'FAILED'
+    payment.save()
+    messages.success(request, f'Payment rejected: {payment.mpesa_code}')
     return redirect('/owner/')

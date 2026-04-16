@@ -1,8 +1,10 @@
-venv/
-*.pyc
 __pycache__/
+*.pyc
+*.pyo
 .env
 dishpoa.db
-db.sqlite3
 media/
-
+staticfiles/
+venv/
+.DS_Store
+*.log
