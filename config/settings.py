@@ -1,6 +1,11 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+import dj_database_url
+
+load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dishpoa-secret-2026-kaliworks')
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
@@ -32,14 +37,34 @@ TEMPLATES = [{'BACKEND':'django.template.backends.django.DjangoTemplates','DIRS'
 WSGI_APPLICATION = 'config.wsgi.application'
 
 import dj_database_url
-DATABASE_URL = os.environ.get('DATABASE_URL','')
+import os
+
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+
 if DATABASE_URL:
-    DATABASES = {'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600)}
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=True
+        )
+    }
 else:
-    DATABASES = {'default': {'ENGINE':'django.db.backends.sqlite3','NAME':BASE_DIR/'dishpoa.db'}}
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'dishpoa.db',
+        }
+    }
 
 AUTH_USER_MODEL = 'users.DishiUser'
-AUTH_PASSWORD_VALIDATORS = [{'NAME':'django.contrib.auth.password_validation.MinimumLengthValidator','OPTIONS':{'min_length':6}}]
+
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Africa/Nairobi'
